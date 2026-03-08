@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>漫画阅读器</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&family=Share+Tech+Mono&display=swap');
+
+  :root {
+    --bg: #0e0e0e;
+    --surface: #1a1a1a;
+    --border: #2a2a2a;
+    --accent: #e8c96d;
+    --accent2: #c45c3a;
+    --text: #e8e2d9;
+    --muted: #666;
+    --reader-max: 780px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Serif SC', serif;
+    min-height: 100vh;
+  }
+
+  /* ── HEADER ── */
+  header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    background: rgba(14,14,14,0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    height: 56px;
+  }
+
+  .header-title {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+  }
+
+  .header-chapter {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+
+  /* ── CHAPTER SELECTOR ── */
+  .chapter-bar {
+    position: fixed;
+    top: 56px; left: 0; right: 0;
+    z-index: 99;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 24px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .chapter-bar::-webkit-scrollbar { display: none; }
+
+  .chapter-btn {
+    flex-shrink: 0;
+    padding: 5px 14px;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.18s;
+    white-space: nowrap;
+  }
+  .chapter-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .chapter-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #0e0e0e;
+    font-weight: 700;
+  }
+
+  /* ── READER AREA ── */
+  #reader {
+    padding-top: 112px;
+    padding-bottom: 100px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .page-img {
+    display: block;
+    width: 100%;
+    max-width: var(--reader-max);
+    height: auto;
+    border: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  .page-img.loaded { opacity: 1; }
+
+  .page-placeholder {
+    width: 100%;
+    max-width: var(--reader-max);
+    height: 500px;
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity: 0.4; }
+    50% { opacity: 0.9; }
+  }
+
+  /* ── BOTTOM NAV ── */
+  .bottom-nav {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: 100;
+    background: rgba(14,14,14,0.95);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    height: 60px;
+    gap: 16px;
+  }
+
+  .nav-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 20px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text);
+    font-family: 'Noto Serif SC', serif;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.18s;
+    white-space: nowrap;
+  }
+  .nav-btn:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(232,201,109,0.06);
+  }
+  .nav-btn:disabled {
+    opacity: 0.25;
+    cursor: default;
+  }
+  .nav-btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #0e0e0e;
+    font-weight: 700;
+  }
+  .nav-btn.primary:hover:not(:disabled) {
+    background: #f0d47a;
+    border-color: #f0d47a;
+    color: #0e0e0e;
+  }
+
+  .progress-info {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    text-align: center;
+    flex: 1;
+    line-height: 1.5;
+  }
+
+  /* ── EMPTY / LOADING STATE ── */
+  #state-msg {
+    padding-top: 180px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 2;
+    display: none;
+  }
+  #state-msg.show { display: block; }
+
+  .drop-hint {
+    margin-top: 12px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    color: #444;
+  }
+
+  /* ── FOLDER PICKER ── */
+  .folder-picker-wrap {
+    padding-top: 140px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .folder-hero {
+    font-size: 13px;
+    color: var(--muted);
+    text-align: center;
+    line-height: 2;
+    max-width: 380px;
+  }
+
+  .folder-hero strong {
+    color: var(--accent);
+    font-size: 22px;
+    display: block;
+    margin-bottom: 8px;
+    font-family: 'Noto Serif SC', serif;
+  }
+
+  .pick-btn {
+    padding: 12px 32px;
+    background: var(--accent);
+    border: none;
+    border-radius: 4px;
+    color: #0e0e0e;
+    font-family: 'Noto Serif SC', serif;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.18s;
+  }
+  .pick-btn:hover { background: #f0d47a; }
+
+  .folder-note {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: #444;
+    text-align: center;
+    line-height: 1.8;
+  }
+
+  /* ── CHAPTER END CARD ── */
+  .end-card {
+    width: 100%;
+    max-width: var(--reader-max);
+    margin-top: 8px;
+    padding: 48px 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+  .end-card-title {
+    font-size: 13px;
+    color: var(--muted);
+    font-family: 'Share Tech Mono', monospace;
+    letter-spacing: 0.1em;
+  }
+  .end-card-btn {
+    padding: 10px 28px;
+    background: var(--accent2);
+    border: none;
+    border-radius: 3px;
+    color: #fff;
+    font-family: 'Noto Serif SC', serif;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity 0.18s;
+  }
+  .end-card-btn:hover { opacity: 0.85; }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-title" id="manga-title">漫画阅读器</div>
+  <button onclick="if(chapters.length)showCatalog()" style="background:transparent;border:1px solid var(--border);color:var(--muted);padding:4px 12px;border-radius:3px;font-size:12px;cursor:pointer;font-family:'Share Tech Mono',monospace;">目录</button>
+  <div class="header-chapter" id="header-chap">—</div>
+</header>
+
+<div class="chapter-bar" id="chapter-bar"></div>
+
+<div id="reader">
+  <div class="folder-picker-wrap" id="picker-wrap">
+    <div class="folder-hero">
+      <strong>漫画阅读器</strong>
+      选择本地文件夹或从阿里云OSS加载
+    </div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;">
+      <button class="pick-btn" onclick="pickFolder()">📂 本地文件夹</button>
+      <button class="pick-btn" style="background:var(--surface);border:1px solid var(--border);color:var(--text);" onclick="showOssInput()">☁️ 阿里云OSS</button>
+    </div>
+    <div id="oss-input-wrap" style="display:none;width:100%;max-width:420px;">
+      <input id="oss-url" type="text" placeholder="输入 index.json 的完整URL" style="
+        width:100%;padding:10px 14px;
+        background:var(--surface);border:1px solid var(--border);
+        border-radius:4px;color:var(--text);font-size:13px;
+        font-family:'Share Tech Mono',monospace;outline:none;
+        box-sizing:border-box;
+      ">
+      <button onclick="loadFromOss()" style="
+        margin-top:8px;width:100%;padding:10px;
+        background:var(--accent);border:none;border-radius:4px;
+        color:#0e0e0e;font-weight:700;font-size:14px;cursor:pointer;
+      ">加载</button>
+    </div>
+    <div class="folder-note">
+      本地：支持 .webp .jpg .jpeg .png<br>
+      OSS：需先运行 oss_upload.py 生成 index.json
+    </div>
+  </div>
+</div>
+
+<div class="bottom-nav" id="bottom-nav" style="display:none">
+  <button class="nav-btn" id="btn-prev" onclick="prevChapter()">← 上一话</button>
+  <div class="progress-info" id="progress-info">—</div>
+  <button class="nav-btn primary" id="btn-next" onclick="nextChapter()">下一话 →</button>
+</div>
+
+<input type="file" id="folder-input" webkitdirectory multiple style="display:none" onchange="onFolderSelected(event)">
+
+<script>
+  let chapters = [];
+  let currentIdx = 0;
+  let mangaKey = '';
+  let ossBaseUrl = '';   // OSS模式下的图片base路径
+
+  function showOssInput() {
+    document.getElementById('oss-input-wrap').style.display = 'block';
+  }
+
+  async function loadFromOss() {
+    const url = document.getElementById('oss-url').value.trim();
+    if (!url) return;
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      const list = data.chapters || [];
+      if (!list.length) throw new Error('index.json 中没有章节数据');
+
+      // 解析base url（index.json所在目录）
+      ossBaseUrl = url.substring(0, url.lastIndexOf('/') + 1);
+
+      // 转换为统一的chapters格式
+      chapters = list.map((ch, i) => ({
+        name:    ch.name,
+        files:   null,          // OSS模式无本地File对象
+        images:  ch.images,     // OSS图片路径数组
+        isOss:   true,
+      }));
+
+      const mangaName = ossBaseUrl.split('/').filter(Boolean).pop() || 'OSS漫画';
+      document.getElementById('manga-title').textContent = mangaName;
+      mangaKey = 'manga_progress_oss_' + mangaName;
+
+      initUI();
+      showCatalog();
+    } catch(e) {
+      alert('加载失败：' + e.message);
+    }
+  }
+
+  function pickFolder() {
+    document.getElementById('folder-input').click();
+  }
+
+  function onFolderSelected(e) {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+
+    const map = {};
+    for (const f of files) {
+      const parts = f.webkitRelativePath.split('/');
+      if (parts.length < 2) continue;
+      const chap = parts[parts.length - 2];
+      if (!map[chap]) map[chap] = [];
+      if (/\.(webp|jpg|jpeg|png|gif)$/i.test(f.name)) {
+        map[chap].push(f);
+      }
+    }
+
+    chapters = Object.keys(map)
+      .sort((a, b) => a.localeCompare(b, undefined, {numeric: true}))
+      .map(name => ({
+        name,
+        files: map[name].sort((a, b) => {
+          const na = parseInt(a.name) || a.name;
+          const nb = parseInt(b.name) || b.name;
+          return na < nb ? -1 : na > nb ? 1 : 0;
+        })
+      }));
+
+    if (!chapters.length) {
+      alert('未找到任何图片文件，请确认文件夹结构正确');
+      return;
+    }
+
+    const rootName = files[0].webkitRelativePath.split('/')[0];
+    document.getElementById('manga-title').textContent = rootName;
+    mangaKey = 'manga_progress_' + rootName;
+
+    initUI();
+    showCatalog();
+  }
+
+  function initUI() {
+    document.getElementById('picker-wrap').style.display = 'none';
+    document.getElementById('bottom-nav').style.display = 'flex';
+
+    const bar = document.getElementById('chapter-bar');
+    bar.innerHTML = '';
+    chapters.forEach((ch, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'chapter-btn';
+      btn.textContent = ch.name;
+      btn.dataset.idx = i;
+      btn.onclick = () => loadChapter(i);
+      bar.appendChild(btn);
+    });
+  }
+
+  function showCatalog() {
+    const reader = document.getElementById('reader');
+    reader.innerHTML = '';
+
+    // 读取上次进度
+    const saved = localStorage.getItem(mangaKey);
+    const lastIdx = saved !== null ? parseInt(saved) : -1;
+
+    // 隐藏底部导航
+    document.getElementById('bottom-nav').style.display = 'none';
+    document.getElementById('header-chap').textContent = '目录';
+
+    // 清除chapter bar高亮
+    document.querySelectorAll('.chapter-btn').forEach(btn => btn.classList.remove('active'));
+
+    // 构建目录
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'width:100%;max-width:780px;padding:24px 16px;';
+
+    // 上次阅读提示
+    if (lastIdx >= 0 && chapters[lastIdx]) {
+      const resume = document.createElement('div');
+      resume.style.cssText = `
+        margin-bottom: 24px;
+        padding: 16px 20px;
+        background: rgba(232,201,109,0.08);
+        border: 1px solid rgba(232,201,109,0.3);
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      `;
+      resume.innerHTML = `
+        <div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px;font-family:'Share Tech Mono',monospace;">上次阅读</div>
+          <div style="font-size:15px;color:var(--accent);font-weight:700;">${chapters[lastIdx].name}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px;">第 ${lastIdx+1} / ${chapters.length} 话</div>
+        </div>
+        <button onclick="loadChapter(${lastIdx})" style="
+          padding:8px 20px;
+          background:var(--accent);
+          border:none;
+          border-radius:4px;
+          color:#0e0e0e;
+          font-weight:700;
+          font-size:13px;
+          cursor:pointer;
+          white-space:nowrap;
+          flex-shrink:0;
+        ">继续阅读 →</button>
+      `;
+      wrap.appendChild(resume);
+    }
+
+    // 目录标题
+    const heading = document.createElement('div');
+    heading.style.cssText = 'font-size:11px;color:var(--muted);font-family:"Share Tech Mono",monospace;letter-spacing:0.1em;margin-bottom:12px;';
+    heading.textContent = `全部章节  (${chapters.length})`;
+    wrap.appendChild(heading);
+
+    // 章节列表
+    const list = document.createElement('div');
+    list.style.cssText = 'display:flex;flex-direction:column;gap:4px;';
+    chapters.forEach((ch, i) => {
+      const row = document.createElement('div');
+      const isLast = i === lastIdx;
+      row.style.cssText = `
+        padding: 12px 16px;
+        background: ${isLast ? 'rgba(232,201,109,0.06)' : 'var(--surface)'};
+        border: 1px solid ${isLast ? 'rgba(232,201,109,0.25)' : 'var(--border)'};
+        border-radius: 4px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        transition: all 0.15s;
+      `;
+      row.onmouseover = () => row.style.borderColor = 'rgba(232,201,109,0.5)';
+      row.onmouseout  = () => row.style.borderColor = isLast ? 'rgba(232,201,109,0.25)' : 'var(--border)';
+      row.onclick = () => loadChapter(i);
+      row.innerHTML = `
+        <span style="font-size:14px;color:${isLast ? 'var(--accent)' : 'var(--text)'};">${ch.name}</span>
+        <span style="font-size:11px;color:var(--muted);font-family:'Share Tech Mono',monospace;">${i+1}</span>
+      `;
+      list.appendChild(row);
+    });
+    wrap.appendChild(list);
+    reader.appendChild(wrap);
+    window.scrollTo({top: 0, behavior: 'instant'});
+  }
+
+  function loadChapter(idx) {
+    currentIdx = idx;
+    const ch = chapters[idx];
+
+    // 保存进度
+    localStorage.setItem(mangaKey, idx);
+
+    document.getElementById('header-chap').textContent = ch.name;
+    document.getElementById('bottom-nav').style.display = 'flex';
+
+    document.querySelectorAll('.chapter-btn').forEach((btn, i) => {
+      btn.classList.toggle('active', i === idx);
+    });
+    const activeBtn = document.querySelector('.chapter-btn.active');
+    if (activeBtn) activeBtn.scrollIntoView({inline: 'center', behavior: 'smooth'});
+
+    document.getElementById('btn-prev').disabled = idx === 0;
+    document.getElementById('btn-next').disabled = idx === chapters.length - 1;
+    document.getElementById('progress-info').innerHTML =
+      `${ch.name}<br><span style="color:#444">${idx + 1} / ${chapters.length}</span>`;
+
+    const reader = document.getElementById('reader');
+    reader.innerHTML = '';
+
+    // 统一图片列表：本地File 或 OSS URL
+    const imgList = ch.isOss
+      ? ch.images.map(path => ({ url: path.startsWith('http') ? path : ossBaseUrl + path.split('/').pop(), isOss: true }))
+      : ch.files.map(file => ({ url: URL.createObjectURL(file), isOss: false }));
+
+    imgList.forEach((item, i) => {
+      const placeholder = document.createElement('div');
+      placeholder.className = 'page-placeholder';
+      placeholder.textContent = `加载中 ${i + 1}/${imgList.length}`;
+      reader.appendChild(placeholder);
+
+      const img = document.createElement('img');
+      img.className = 'page-img';
+      img.alt = `第${i+1}页`;
+      img.onload = () => {
+        img.classList.add('loaded');
+        placeholder.replaceWith(img);
+      };
+      img.onerror = () => {
+        placeholder.textContent = `图片加载失败`;
+        placeholder.style.color = '#c45c3a';
+        placeholder.style.height = '80px';
+      };
+      img.src = item.url;
+    });
+
+    // 末尾卡片
+    const card = document.createElement('div');
+    card.className = 'end-card';
+    if (idx < chapters.length - 1) {
+      card.innerHTML = `
+        <div class="end-card-title">— 本话完 —</div>
+        <button class="end-card-btn" onclick="nextChapter()">继续阅读下一话 →</button>
+        <button class="end-card-btn" style="background:var(--surface);border:1px solid var(--border);color:var(--muted);" onclick="showCatalog()">返回目录</button>
+      `;
+    } else {
+      card.innerHTML = `
+        <div class="end-card-title">— 已是最新一话 —</div>
+        <button class="end-card-btn" style="background:var(--surface);border:1px solid var(--border);color:var(--muted);" onclick="showCatalog()">返回目录</button>
+      `;
+    }
+    reader.appendChild(card);
+    window.scrollTo({top: 0, behavior: 'instant'});
+  }
+
+  function prevChapter() {
+    if (currentIdx > 0) loadChapter(currentIdx - 1);
+  }
+
+  function nextChapter() {
+    if (currentIdx < chapters.length - 1) loadChapter(currentIdx + 1);
+  }
+
+  document.addEventListener('keydown', e => {
+    if (!chapters.length) return;
+    if (e.key === 'ArrowLeft') prevChapter();
+    if (e.key === 'ArrowRight') nextChapter();
+  });
+</script>
+</body>
+</html>
